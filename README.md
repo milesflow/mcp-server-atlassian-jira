@@ -1,8 +1,15 @@
-# Connect AI to Your Jira Projects
+# Jira + Tempo MCP Server
 
-Transform how you manage and track your work by connecting Claude, Cursor AI, and other AI assistants directly to your Jira projects, issues, and workflows. Get instant project insights, streamline issue management, and enhance your team collaboration.
+Connect Cursor, Claude, and other MCP clients directly to Jira and Tempo Cloud using one local MCP server. This repository is a **fork (customized variant)** of [`@aashari/mcp-server-atlassian-jira`](https://www.npmjs.com/package/@aashari/mcp-server-atlassian-jira): same published package name when you run via `npx`, with extra behavior in this tree (file-based Jira profiles, Tempo tools, and related docs).
 
 [![NPM Version](https://img.shields.io/npm/v/@aashari/mcp-server-atlassian-jira)](https://www.npmjs.com/package/@aashari/mcp-server-atlassian-jira)
+
+## What Is Different In This Repo
+
+- **File-based Jira profiles**: prefer `ATLASSIAN_PROFILES_FILE` for named multi-site Jira access.
+- **Deterministic profile resolution**: explicit `profile`, then `ATLASSIAN_DEFAULT_PROFILE`, then file `defaultProfile`, then legacy single-site credentials.
+- **Tempo Cloud support**: generic Tempo REST tools plus helper tools for common account/contract flows.
+- **Backward compatibility**: legacy single-site `ATLASSIAN_SITE_NAME`, `ATLASSIAN_USER_EMAIL`, and `ATLASSIAN_API_TOKEN` still work for quick tests or simple setups.
 
 ## What You Can Do
 
@@ -22,11 +29,17 @@ Transform how you manage and track your work by connecting Claude, Cursor AI, an
 - **QA Engineers** tracking bugs and testing status
 - **Anyone** who wants to interact with Jira using natural language
 
-## Quick Start
+## Recommended Setup
 
-Get up and running in 2 minutes:
+If you plan to use this variant regularly, the recommended setup is:
 
-### 1. Get Your Jira Credentials
+- `ATLASSIAN_PROFILES_FILE` for Jira profiles
+- `ATLASSIAN_DEFAULT_PROFILE` to override the default profile when needed
+- `TEMPO_API_TOKEN` if you want Tempo worklogs, accounts, or attributes
+
+Use the legacy single-site env vars only if you want the smallest possible setup for one Jira site.
+
+### 1. Create Jira Credentials
 
 Generate a Jira API Token:
 1. Go to [Atlassian API Tokens](https://id.atlassian.com/manage-profile/security/api-tokens)
@@ -34,7 +47,136 @@ Generate a Jira API Token:
 3. Give it a name like **"AI Assistant"**
 4. **Copy the generated token** immediately (you won't see it again!)
 
-### 2. Try It Instantly
+### 2. Create A Shared Profiles File
+
+Create a JSON file such as `~/jira-profiles.json`:
+
+```json
+{
+  "defaultProfile": "company",
+  "profiles": {
+    "company": {
+      "siteName": "your-company",
+      "userEmail": "your.email@company.com",
+      "apiToken": "your_api_token"
+    },
+    "client-x": {
+      "siteName": "client-x",
+      "userEmail": "your.email@company.com",
+      "apiToken": "your_other_api_token"
+    }
+  }
+}
+```
+
+`ATLASSIAN_PROFILES_JSON` is no longer supported for Jira profiles. Migrate profile-based setups to `ATLASSIAN_PROFILES_FILE`.
+
+### 3. Configure Your MCP Client
+
+Use the same shared profiles file in Cursor, Claude Desktop, or any other MCP client.
+
+### Local CLI: `.env`
+
+For commands run from a shell in this repo (for example `npm run cli`), copy `.env.example` to `.env` and fill in the variables. Keep **`ATLASSIAN_PROFILES_FILE` as an absolute path** so resolution does not depend on the working directory. The example file lists the same Jira and Tempo variables as this README, with legacy single-site fields as a fallback when no profiles file is set.
+
+## Connect to AI Assistants
+
+### For Cursor
+
+Add a server entry like this to your Cursor `mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@aashari/mcp-server-atlassian-jira"],
+      "env": {
+        "ATLASSIAN_PROFILES_FILE": "${userHome}/jira-profiles.json",
+        "ATLASSIAN_DEFAULT_PROFILE": "company",
+        "TEMPO_API_TOKEN": "${env:TEMPO_API_TOKEN}",
+        "TEMPO_API_BASE_URL": "https://api.tempo.io/4"
+      }
+    }
+  }
+}
+```
+
+If you only need Jira, omit the Tempo variables.
+
+### For Claude Desktop
+
+Add this to your Claude configuration file (`~/.claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@aashari/mcp-server-atlassian-jira"],
+      "env": {
+        "ATLASSIAN_PROFILES_FILE": "/absolute/path/to/jira-profiles.json",
+        "ATLASSIAN_DEFAULT_PROFILE": "company",
+        "TEMPO_API_TOKEN": "your_tempo_api_token",
+        "TEMPO_API_BASE_URL": "https://api.tempo.io/4"
+      }
+    }
+  }
+}
+```
+
+If you only need Jira, omit the Tempo variables.
+
+Restart Claude Desktop and you should see the server in the status bar.
+
+### Alternative: System-Wide MCP Config
+
+Create `~/.mcp/configs.json` for system-wide configuration:
+
+```json
+{
+  "jira": {
+    "environments": {
+      "ATLASSIAN_PROFILES_FILE": "/absolute/path/to/jira-profiles.json",
+      "ATLASSIAN_DEFAULT_PROFILE": "company"
+    }
+  },
+  "tempo": {
+    "environments": {
+      "TEMPO_API_TOKEN": "your_tempo_api_token",
+      "TEMPO_API_BASE_URL": "https://api.tempo.io/4"
+    }
+  }
+}
+```
+
+**Alternative config keys:** The system also accepts `"atlassian-jira"`, `"@aashari/mcp-server-atlassian-jira"`, or `"mcp-server-atlassian-jira"` instead of `"jira"`.
+
+### Jira Profile Precedence
+
+When profiles are configured, the server resolves Jira credentials in this order:
+
+1. Explicit `profile` passed to a Jira tool call
+2. `ATLASSIAN_DEFAULT_PROFILE` if set
+3. `defaultProfile` from `ATLASSIAN_PROFILES_FILE`
+4. Legacy single-site `ATLASSIAN_*` credentials
+
+Example tool call targeting a non-default Jira site:
+
+```json
+{
+  "profile": "client-x",
+  "path": "/rest/api/3/project/search",
+  "queryParams": {
+    "maxResults": "10"
+  }
+}
+```
+
+## Quick Test For A Single Jira Site
+
+If you want to verify credentials quickly before setting up profiles, use the legacy single-site env vars:
 
 ```bash
 # Set your credentials
@@ -52,35 +194,7 @@ npx -y @aashari/mcp-server-atlassian-jira get --path "/rest/api/3/project/DEV"
 npx -y @aashari/mcp-server-atlassian-jira get --path "/rest/api/3/issue/PROJ-123" --jq "{key: key, summary: fields.summary, status: fields.status.name}"
 ```
 
-## Connect to AI Assistants
-
-### For Claude Desktop Users
-
-Add this to your Claude configuration file (`~/.claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "jira": {
-      "command": "npx",
-      "args": ["-y", "@aashari/mcp-server-atlassian-jira"],
-      "env": {
-        "ATLASSIAN_SITE_NAME": "your-company",
-        "ATLASSIAN_USER_EMAIL": "your.email@company.com",
-        "ATLASSIAN_API_TOKEN": "your_api_token",
-        "TEMPO_API_TOKEN": "your_tempo_api_token",
-        "TEMPO_API_BASE_URL": "https://api.tempo.io/4"
-      }
-    }
-  }
-}
-```
-
-Restart Claude Desktop, and you'll see the jira server in the status bar.
-
-### For Other AI Assistants
-
-Most AI assistants support MCP. Install the server globally:
+Most AI assistants support MCP. You can also install the server globally:
 
 ```bash
 npm install -g @aashari/mcp-server-atlassian-jira
@@ -88,9 +202,7 @@ npm install -g @aashari/mcp-server-atlassian-jira
 
 Then configure your AI assistant to use the MCP server with STDIO transport.
 
-### Alternative: Configuration File
-
-Create `~/.mcp/configs.json` for system-wide configuration:
+For backward compatibility, you can still use the legacy single-site `environments` block instead of profiles:
 
 ```json
 {
@@ -104,15 +216,13 @@ Create `~/.mcp/configs.json` for system-wide configuration:
 }
 ```
 
-**Alternative config keys:** The system also accepts `"atlassian-jira"`, `"@aashari/mcp-server-atlassian-jira"`, or `"mcp-server-atlassian-jira"` instead of `"jira"`.
-
 For **Tempo**, you can add a sibling block using the key `"tempo"` or `"tempo-cloud"` with the same `environments` shape (e.g. `TEMPO_API_TOKEN`, optional `TEMPO_API_BASE_URL`).
 
 ## Available Tools
 
 This MCP server exposes **generic HTTP tools** for **Jira** and (optionally) **Tempo Cloud**.
 
-### Jira (`ATLASSIAN_*` credentials)
+### Jira (`ATLASSIAN_PROFILES_FILE` or legacy `ATLASSIAN_*` credentials)
 
 | Tool | Description |
 |------|-------------|
@@ -121,6 +231,8 @@ This MCP server exposes **generic HTTP tools** for **Jira** and (optionally) **T
 | `jira_put` | PUT to any endpoint (replace resources) |
 | `jira_patch` | PATCH any endpoint (partial updates) |
 | `jira_delete` | DELETE any endpoint (remove resources) |
+
+Each Jira tool also accepts an optional `profile` field so one MCP server can target multiple configured Jira sites.
 
 ### Tempo Cloud (`TEMPO_API_TOKEN`)
 
@@ -448,8 +560,9 @@ This server follows the 5-layer MCP architecture:
 
 Enable debug logging by setting the `DEBUG` environment variable:
 
-```bash
-# In Claude Desktop config
+Legacy single-site example (Claude Desktop or Cursor `env`):
+
+```json
 {
   "mcpServers": {
     "jira": {
@@ -466,9 +579,23 @@ Enable debug logging by setting the `DEBUG` environment variable:
 }
 ```
 
+With **profiles**, use `ATLASSIAN_PROFILES_FILE` and optional `ATLASSIAN_DEFAULT_PROFILE` instead of the three `ATLASSIAN_*` site variables above.
+
 Debug logs are written to `~/.mcp/data/mcp-server-atlassian-jira.<session-id>.log`
 
 **Check raw API responses:** When responses are truncated, the full raw response is saved to `/tmp/mcp/mcp-server-atlassian-jira/<timestamp>-<random>.txt` with request/response details.
+
+## Migration from upstream npm package
+
+If you already used the published [`@aashari/mcp-server-atlassian-jira`](https://www.npmjs.com/package/@aashari/mcp-server-atlassian-jira) from npm or the upstream repo:
+
+- **Legacy single-site env vars** (`ATLASSIAN_SITE_NAME`, `ATLASSIAN_USER_EMAIL`, `ATLASSIAN_API_TOKEN`) still behave the same.
+- **Multi-site**: configure `ATLASSIAN_PROFILES_FILE` (JSON file with `profiles` and optional `defaultProfile`). **`ATLASSIAN_PROFILES_JSON` is not supported** in this codebase; move that JSON into a file and set `ATLASSIAN_PROFILES_FILE`.
+- **Default profile**: `ATLASSIAN_DEFAULT_PROFILE` overrides `defaultProfile` in the file when both are set.
+- **Tempo**: set `TEMPO_API_TOKEN` (and optionally `TEMPO_API_BASE_URL`, default `https://api.tempo.io/4`) to enable `tempo_*` tools.
+- **Per-request Jira site**: pass `profile` on each `jira_*` tool call when you have multiple named profiles.
+
+Upstream documentation and this README may differ; treat this file as the source of truth for **this** repository.
 
 ## Migration from v2.x
 

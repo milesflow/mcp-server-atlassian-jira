@@ -1,6 +1,9 @@
 import { Logger } from './logger.util.js';
 import { config } from './config.util.js';
+import fs from 'fs';
+import path from 'path';
 import {
+	createAuthMissingError,
 	createAuthInvalidError,
 	createApiError,
 	createUnexpectedError,
@@ -15,6 +18,10 @@ const transportLogger = Logger.forContext('utils/transport.util.ts');
 // Log transport utility initialization
 transportLogger.debug('Transport utility initialized');
 
+const ATLASSIAN_PROFILES_FILE_ENV_KEY = 'ATLASSIAN_PROFILES_FILE';
+const ATLASSIAN_PROFILES_JSON_ENV_KEY = 'ATLASSIAN_PROFILES_JSON';
+const ATLASSIAN_DEFAULT_PROFILE_ENV_KEY = 'ATLASSIAN_DEFAULT_PROFILE';
+
 /**
  * Interface for Atlassian API credentials
  */
@@ -22,6 +29,22 @@ export interface AtlassianCredentials {
 	siteName: string;
 	userEmail: string;
 	apiToken: string;
+}
+
+interface AtlassianProfileDefinition {
+	siteName?: unknown;
+	userEmail?: unknown;
+	apiToken?: unknown;
+}
+
+interface AtlassianProfilesConfig {
+	defaultProfile?: string;
+	profiles: Record<string, AtlassianProfileDefinition>;
+}
+
+interface AtlassianProfilesFileContent {
+	defaultProfile?: unknown;
+	profiles?: unknown;
 }
 
 /**
@@ -45,29 +68,187 @@ export interface TransportResponse<T> {
  * Get Atlassian credentials from environment variables
  * @returns AtlassianCredentials object or null if credentials are missing
  */
-export function getAtlassianCredentials(): AtlassianCredentials | null {
-	const methodLogger = Logger.forContext(
-		'utils/transport.util.ts',
-		'getAtlassianCredentials',
-	);
-
+function getLegacyAtlassianCredentials(): AtlassianCredentials | null {
 	const siteName = config.get('ATLASSIAN_SITE_NAME');
 	const userEmail = config.get('ATLASSIAN_USER_EMAIL');
 	const apiToken = config.get('ATLASSIAN_API_TOKEN');
 
 	if (!siteName || !userEmail || !apiToken) {
+		return null;
+	}
+
+	return {
+		siteName,
+		userEmail,
+		apiToken,
+	};
+}
+
+function getConfiguredAtlassianProfiles(): AtlassianProfilesConfig | null {
+	const legacyProfilesJson = config.get(ATLASSIAN_PROFILES_JSON_ENV_KEY);
+	if (legacyProfilesJson) {
+		throw createAuthInvalidError(
+			`Unsupported ${ATLASSIAN_PROFILES_JSON_ENV_KEY} configuration. Migrate Jira profiles to ${ATLASSIAN_PROFILES_FILE_ENV_KEY}.`,
+		);
+	}
+
+	const profilesFileRaw = config.get(ATLASSIAN_PROFILES_FILE_ENV_KEY);
+	if (!profilesFileRaw) {
+		return null;
+	}
+
+	const profilesFilePath = path.resolve(profilesFileRaw);
+
+	try {
+		const fileContent = fs.readFileSync(profilesFilePath, 'utf8');
+		const parsed = JSON.parse(fileContent) as AtlassianProfilesFileContent;
+
+		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+			throw new Error(
+				'Expected a JSON object with "profiles" and optional "defaultProfile"',
+			);
+		}
+
+		if (
+			!parsed.profiles ||
+			typeof parsed.profiles !== 'object' ||
+			Array.isArray(parsed.profiles)
+		) {
+			throw new Error(
+				'Expected "profiles" to be a JSON object keyed by profile name',
+			);
+		}
+
+		const fileDefaultProfile =
+			typeof parsed.defaultProfile === 'string'
+				? parsed.defaultProfile
+				: undefined;
+
+		return {
+			defaultProfile:
+				config.get(ATLASSIAN_DEFAULT_PROFILE_ENV_KEY) ||
+				fileDefaultProfile,
+			profiles: parsed.profiles as Record<
+				string,
+				AtlassianProfileDefinition
+			>,
+		};
+	} catch (error) {
+		const errorDetails =
+			error instanceof Error
+				? `${error.name}: ${error.message}`
+				: String(error);
+
+		if (error instanceof SyntaxError) {
+			throw createAuthInvalidError(
+				`Invalid ${ATLASSIAN_PROFILES_FILE_ENV_KEY} JSON at "${profilesFilePath}". Expected a JSON object with "profiles" and optional "defaultProfile".`,
+				error,
+			);
+		}
+
+		if (/ENOENT|EACCES|no such file|permission denied/i.test(errorDetails)) {
+			throw createAuthInvalidError(
+				`Cannot read ${ATLASSIAN_PROFILES_FILE_ENV_KEY} at "${profilesFilePath}". Verify that the file exists and is readable.`,
+				error,
+			);
+		}
+
+		throw createAuthInvalidError(
+			`Invalid ${ATLASSIAN_PROFILES_FILE_ENV_KEY} at "${profilesFilePath}". ${error instanceof Error ? error.message : 'Expected a JSON object with "profiles" and optional "defaultProfile".'}`,
+			error,
+		);
+	}
+}
+
+function describeAvailableProfiles(profileNames: string[]): string {
+	return profileNames.length > 0
+		? ` Available profiles: ${profileNames.join(', ')}.`
+		: ' No Jira profiles are currently configured.';
+}
+
+function validateConfiguredProfile(
+	profileName: string,
+	profile: AtlassianProfileDefinition | undefined,
+): AtlassianCredentials {
+	if (!profile || typeof profile !== 'object') {
+		throw createAuthInvalidError(
+			`Unknown Jira profile "${profileName}". Review your Jira profile configuration.`,
+		);
+	}
+
+	const siteName =
+		typeof profile.siteName === 'string' ? profile.siteName.trim() : '';
+	const userEmail =
+		typeof profile.userEmail === 'string' ? profile.userEmail.trim() : '';
+	const apiToken =
+		typeof profile.apiToken === 'string' ? profile.apiToken.trim() : '';
+
+	if (!siteName || !userEmail || !apiToken) {
+		throw createAuthInvalidError(
+			`Invalid Jira profile "${profileName}". Each profile must include siteName, userEmail, and apiToken.`,
+		);
+	}
+
+	return { siteName, userEmail, apiToken };
+}
+
+export function getAtlassianCredentials(
+	profileName?: string,
+): AtlassianCredentials | null {
+	const methodLogger = Logger.forContext(
+		'utils/transport.util.ts',
+		'getAtlassianCredentials',
+	);
+
+	const profilesConfig = getConfiguredAtlassianProfiles();
+	const availableProfiles = Object.keys(profilesConfig?.profiles || {}).sort();
+	const requestedProfile = profileName?.trim();
+
+	if (requestedProfile) {
+		const profile = profilesConfig?.profiles[requestedProfile];
+		if (!profile) {
+			throw createAuthInvalidError(
+				`Unknown Jira profile "${requestedProfile}". Review your Jira profile configuration.${describeAvailableProfiles(availableProfiles)}`,
+			);
+		}
+
+		methodLogger.debug(`Using Jira profile "${requestedProfile}"`);
+		return validateConfiguredProfile(requestedProfile, profile);
+	}
+
+	if (profilesConfig?.defaultProfile) {
+		const defaultProfile = profilesConfig.defaultProfile.trim();
+		const profile = profilesConfig.profiles[defaultProfile];
+		if (!profile) {
+			throw createAuthInvalidError(
+				`Default Jira profile "${defaultProfile}" is not configured.${describeAvailableProfiles(availableProfiles)}`,
+			);
+		}
+
+		methodLogger.debug(`Using default Jira profile "${defaultProfile}"`);
+		return validateConfiguredProfile(defaultProfile, profile);
+	}
+
+	const legacyCredentials = getLegacyAtlassianCredentials();
+	if (legacyCredentials) {
+		methodLogger.debug('Using legacy Atlassian credentials');
+		return legacyCredentials;
+	}
+
+	if (availableProfiles.length > 0) {
+		throw createAuthMissingError(
+			`Jira profiles are configured but no default profile was set. Specify a profile in the request or configure ${ATLASSIAN_DEFAULT_PROFILE_ENV_KEY}.${describeAvailableProfiles(availableProfiles)}`,
+		);
+	}
+
+	if (!legacyCredentials) {
 		methodLogger.warn(
 			'Missing Atlassian credentials. Please set ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, and ATLASSIAN_API_TOKEN environment variables.',
 		);
 		return null;
 	}
 
-	methodLogger.debug('Using Atlassian credentials');
-	return {
-		siteName,
-		userEmail,
-		apiToken,
-	};
+	return legacyCredentials;
 }
 
 /**
