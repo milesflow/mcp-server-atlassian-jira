@@ -52,3 +52,4 @@ temp/
 
 # Misc
 .yarn-integrity
+profiles.json

@@ -1,5 +1,7 @@
 import { Logger } from './logger.util.js';
 import { config } from './config.util.js';
+import fs from 'fs';
+import path from 'path';
 import {
 	createAuthMissingError,
 	createAuthInvalidError,
@@ -16,7 +18,8 @@ const transportLogger = Logger.forContext('utils/transport.util.ts');
 // Log transport utility initialization
 transportLogger.debug('Transport utility initialized');
 
-const ATLASSIAN_PROFILES_ENV_KEY = 'ATLASSIAN_PROFILES_JSON';
+const ATLASSIAN_PROFILES_FILE_ENV_KEY = 'ATLASSIAN_PROFILES_FILE';
+const ATLASSIAN_PROFILES_JSON_ENV_KEY = 'ATLASSIAN_PROFILES_JSON';
 const ATLASSIAN_DEFAULT_PROFILE_ENV_KEY = 'ATLASSIAN_DEFAULT_PROFILE';
 
 /**
@@ -37,6 +40,11 @@ interface AtlassianProfileDefinition {
 interface AtlassianProfilesConfig {
 	defaultProfile?: string;
 	profiles: Record<string, AtlassianProfileDefinition>;
+}
+
+interface AtlassianProfilesFileContent {
+	defaultProfile?: unknown;
+	profiles?: unknown;
 }
 
 /**
@@ -77,24 +85,76 @@ function getLegacyAtlassianCredentials(): AtlassianCredentials | null {
 }
 
 function getConfiguredAtlassianProfiles(): AtlassianProfilesConfig | null {
-	const rawProfiles = config.get(ATLASSIAN_PROFILES_ENV_KEY);
-	if (!rawProfiles) {
+	const legacyProfilesJson = config.get(ATLASSIAN_PROFILES_JSON_ENV_KEY);
+	if (legacyProfilesJson) {
+		throw createAuthInvalidError(
+			`Unsupported ${ATLASSIAN_PROFILES_JSON_ENV_KEY} configuration. Migrate Jira profiles to ${ATLASSIAN_PROFILES_FILE_ENV_KEY}.`,
+		);
+	}
+
+	const profilesFileRaw = config.get(ATLASSIAN_PROFILES_FILE_ENV_KEY);
+	if (!profilesFileRaw) {
 		return null;
 	}
 
+	const profilesFilePath = path.resolve(profilesFileRaw);
+
 	try {
-		const parsed = JSON.parse(rawProfiles);
+		const fileContent = fs.readFileSync(profilesFilePath, 'utf8');
+		const parsed = JSON.parse(fileContent) as AtlassianProfilesFileContent;
+
 		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-			throw new Error('Expected a JSON object keyed by profile name');
+			throw new Error(
+				'Expected a JSON object with "profiles" and optional "defaultProfile"',
+			);
 		}
 
+		if (
+			!parsed.profiles ||
+			typeof parsed.profiles !== 'object' ||
+			Array.isArray(parsed.profiles)
+		) {
+			throw new Error(
+				'Expected "profiles" to be a JSON object keyed by profile name',
+			);
+		}
+
+		const fileDefaultProfile =
+			typeof parsed.defaultProfile === 'string'
+				? parsed.defaultProfile
+				: undefined;
+
 		return {
-			defaultProfile: config.get(ATLASSIAN_DEFAULT_PROFILE_ENV_KEY),
-			profiles: parsed as Record<string, AtlassianProfileDefinition>,
+			defaultProfile:
+				config.get(ATLASSIAN_DEFAULT_PROFILE_ENV_KEY) ||
+				fileDefaultProfile,
+			profiles: parsed.profiles as Record<
+				string,
+				AtlassianProfileDefinition
+			>,
 		};
 	} catch (error) {
+		const errorDetails =
+			error instanceof Error
+				? `${error.name}: ${error.message}`
+				: String(error);
+
+		if (error instanceof SyntaxError) {
+			throw createAuthInvalidError(
+				`Invalid ${ATLASSIAN_PROFILES_FILE_ENV_KEY} JSON at "${profilesFilePath}". Expected a JSON object with "profiles" and optional "defaultProfile".`,
+				error,
+			);
+		}
+
+		if (/ENOENT|EACCES|no such file|permission denied/i.test(errorDetails)) {
+			throw createAuthInvalidError(
+				`Cannot read ${ATLASSIAN_PROFILES_FILE_ENV_KEY} at "${profilesFilePath}". Verify that the file exists and is readable.`,
+				error,
+			);
+		}
+
 		throw createAuthInvalidError(
-			`Invalid ${ATLASSIAN_PROFILES_ENV_KEY}. Expected a JSON object keyed by profile name.`,
+			`Invalid ${ATLASSIAN_PROFILES_FILE_ENV_KEY} at "${profilesFilePath}". ${error instanceof Error ? error.message : 'Expected a JSON object with "profiles" and optional "defaultProfile".'}`,
 			error,
 		);
 	}

@@ -1,21 +1,39 @@
 import { request } from './vendor.atlassian.api.service.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 const ORIGINAL_ENV = { ...process.env };
+const TEMP_DIRECTORIES: string[] = [];
 
 function setProfiles(): void {
-	process.env.ATLASSIAN_DEFAULT_PROFILE = 'client-a';
-	process.env.ATLASSIAN_PROFILES_JSON = JSON.stringify({
-		'client-a': {
-			siteName: 'client-a',
-			userEmail: 'a@example.com',
-			apiToken: 'token-a',
-		},
-		'client-b': {
-			siteName: 'client-b',
-			userEmail: 'b@example.com',
-			apiToken: 'token-b',
-		},
-	});
+	const tempDir = fs.mkdtempSync(
+		path.join(os.tmpdir(), 'jira-service-profiles-'),
+	);
+	TEMP_DIRECTORIES.push(tempDir);
+
+	const filePath = path.join(tempDir, 'jira-profiles.json');
+	fs.writeFileSync(
+		filePath,
+		JSON.stringify({
+			defaultProfile: 'client-a',
+			profiles: {
+				'client-a': {
+					siteName: 'client-a',
+					userEmail: 'a@example.com',
+					apiToken: 'token-a',
+				},
+				'client-b': {
+					siteName: 'client-b',
+					userEmail: 'b@example.com',
+					apiToken: 'token-b',
+				},
+			},
+		}),
+		'utf8',
+	);
+
+	process.env.ATLASSIAN_PROFILES_FILE = filePath;
 }
 
 describe('VendorAtlassianApiService', () => {
@@ -24,6 +42,7 @@ describe('VendorAtlassianApiService', () => {
 		delete process.env.ATLASSIAN_SITE_NAME;
 		delete process.env.ATLASSIAN_USER_EMAIL;
 		delete process.env.ATLASSIAN_API_TOKEN;
+		delete process.env.ATLASSIAN_PROFILES_FILE;
 		delete process.env.ATLASSIAN_PROFILES_JSON;
 		delete process.env.ATLASSIAN_DEFAULT_PROFILE;
 
@@ -39,6 +58,9 @@ describe('VendorAtlassianApiService', () => {
 	});
 
 	afterAll(() => {
+		for (const tempDir of TEMP_DIRECTORIES) {
+			fs.rmSync(tempDir, { recursive: true, force: true });
+		}
 		process.env = ORIGINAL_ENV;
 	});
 
@@ -78,6 +100,18 @@ describe('VendorAtlassianApiService', () => {
 				profile: 'missing',
 			}),
 		).rejects.toThrow('Unknown Jira profile "missing"');
+
+		expect(global.fetch).not.toHaveBeenCalled();
+	});
+
+	it('fails before making a Jira call when ATLASSIAN_PROFILES_JSON is configured', async () => {
+		process.env.ATLASSIAN_PROFILES_JSON = '{"client-a":{}}';
+
+		await expect(
+			request('/rest/api/3/project/search', {
+				method: 'GET',
+			}),
+		).rejects.toThrow('Unsupported ATLASSIAN_PROFILES_JSON configuration');
 
 		expect(global.fetch).not.toHaveBeenCalled();
 	});

@@ -68,7 +68,7 @@ Add this to your Claude configuration file (`~/.claude/claude_desktop_config.jso
       "args": ["-y", "@aashari/mcp-server-atlassian-jira"],
       "env": {
         "ATLASSIAN_DEFAULT_PROFILE": "company",
-        "ATLASSIAN_PROFILES_JSON": "{\"company\":{\"siteName\":\"your-company\",\"userEmail\":\"your.email@company.com\",\"apiToken\":\"your_api_token\"},\"client-x\":{\"siteName\":\"client-x\",\"userEmail\":\"your.email@company.com\",\"apiToken\":\"your_api_token\"}}",
+        "ATLASSIAN_PROFILES_FILE": "/absolute/path/to/jira-profiles.json",
         "TEMPO_API_TOKEN": "your_tempo_api_token",
         "TEMPO_API_BASE_URL": "https://api.tempo.io/4"
       }
@@ -76,6 +76,28 @@ Add this to your Claude configuration file (`~/.claude/claude_desktop_config.jso
   }
 }
 ```
+
+Create `/absolute/path/to/jira-profiles.json` with your Jira profiles:
+
+```json
+{
+  "defaultProfile": "company",
+  "profiles": {
+    "company": {
+      "siteName": "your-company",
+      "userEmail": "your.email@company.com",
+      "apiToken": "your_api_token"
+    },
+    "client-x": {
+      "siteName": "client-x",
+      "userEmail": "your.email@company.com",
+      "apiToken": "your_api_token"
+    }
+  }
+}
+```
+
+`ATLASSIAN_PROFILES_JSON` is no longer supported for Jira profiles. Migrate profile-based setups to `ATLASSIAN_PROFILES_FILE`.
 
 Restart Claude Desktop, and you'll see the jira server in the status bar.
 
@@ -96,18 +118,9 @@ Create `~/.mcp/configs.json` for system-wide configuration:
 ```json
 {
   "jira": {
-    "defaultProfile": "company",
-    "profiles": {
-      "company": {
-        "siteName": "your-company",
-        "userEmail": "your.email@company.com",
-        "apiToken": "your_api_token"
-      },
-      "client-x": {
-        "siteName": "client-x",
-        "userEmail": "your.email@company.com",
-        "apiToken": "your_api_token"
-      }
+    "environments": {
+      "ATLASSIAN_PROFILES_FILE": "/absolute/path/to/jira-profiles.json",
+      "ATLASSIAN_DEFAULT_PROFILE": "company"
     }
   }
 }
@@ -115,7 +128,27 @@ Create `~/.mcp/configs.json` for system-wide configuration:
 
 **Alternative config keys:** The system also accepts `"atlassian-jira"`, `"@aashari/mcp-server-atlassian-jira"`, or `"mcp-server-atlassian-jira"` instead of `"jira"`.
 
-For backward compatibility, you can still use the legacy single-site `environments` block:
+The profiles file should contain:
+
+```json
+{
+  "defaultProfile": "company",
+  "profiles": {
+    "company": {
+      "siteName": "your-company",
+      "userEmail": "your.email@company.com",
+      "apiToken": "your_api_token"
+    },
+    "client-x": {
+      "siteName": "client-x",
+      "userEmail": "your.email@company.com",
+      "apiToken": "your_api_token"
+    }
+  }
+}
+```
+
+For backward compatibility, you can still use the legacy single-site `environments` block instead of profiles:
 
 ```json
 {
