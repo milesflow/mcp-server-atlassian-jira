@@ -1,8 +1,8 @@
 # Jira + Tempo MCP Server
 
-Connect Cursor, Claude, and other MCP clients directly to Jira and Tempo Cloud using one local MCP server. This repository is a **fork (customized variant)** of [`@aashari/mcp-server-atlassian-jira`](https://www.npmjs.com/package/@aashari/mcp-server-atlassian-jira): same published package name when you run via `npx`, with extra behavior in this tree (file-based Jira profiles, Tempo tools, and related docs).
+Connect Cursor, Claude, and other MCP clients directly to Jira and Tempo Cloud using **mcp-jira-tempo**: one MCP server with file-based Jira profiles, generic Jira/Tempo REST tools, and optional Tempo helper tools.
 
-[![NPM Version](https://img.shields.io/npm/v/@aashari/mcp-server-atlassian-jira)](https://www.npmjs.com/package/@aashari/mcp-server-atlassian-jira)
+[![npm](https://img.shields.io/npm/v/mcp-jira-tempo)](https://www.npmjs.com/package/mcp-jira-tempo)
 
 ## What Is Different In This Repo
 
@@ -49,7 +49,9 @@ Generate a Jira API Token:
 
 ### 2. Create A Shared Profiles File
 
-Create a JSON file such as `~/jira-profiles.json`:
+Copy the committed template [`examples/jira-profiles.example.json`](examples/jira-profiles.example.json) to a path you control (for example `~/jira-profiles.json` or a gitignored `profiles.json` in this clone), replace the placeholders with real tokens, then point `ATLASSIAN_PROFILES_FILE` at that file using an **absolute** path.
+
+Minimal shape:
 
 ```json
 {
@@ -91,7 +93,7 @@ Add a server entry like this to your Cursor `mcp.json`:
     "jira": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@aashari/mcp-server-atlassian-jira"],
+      "args": ["-y", "mcp-jira-tempo"],
       "env": {
         "ATLASSIAN_PROFILES_FILE": "${userHome}/jira-profiles.json",
         "ATLASSIAN_DEFAULT_PROFILE": "company",
@@ -114,7 +116,7 @@ Add this to your Claude configuration file (`~/.claude/claude_desktop_config.jso
   "mcpServers": {
     "jira": {
       "command": "npx",
-      "args": ["-y", "@aashari/mcp-server-atlassian-jira"],
+      "args": ["-y", "mcp-jira-tempo"],
       "env": {
         "ATLASSIAN_PROFILES_FILE": "/absolute/path/to/jira-profiles.json",
         "ATLASSIAN_DEFAULT_PROFILE": "company",
@@ -151,7 +153,7 @@ Create `~/.mcp/configs.json` for system-wide configuration:
 }
 ```
 
-**Alternative config keys:** The system also accepts `"atlassian-jira"`, `"@aashari/mcp-server-atlassian-jira"`, or `"mcp-server-atlassian-jira"` instead of `"jira"`.
+**Alternative config keys:** The system also accepts `"atlassian-jira"` or `"mcp-jira-tempo"` instead of `"jira"`.
 
 ### Jira Profile Precedence
 
@@ -185,19 +187,21 @@ export ATLASSIAN_USER_EMAIL="your.email@company.com"
 export ATLASSIAN_API_TOKEN="your_api_token"
 
 # List your Jira projects
-npx -y @aashari/mcp-server-atlassian-jira get --path "/rest/api/3/project/search"
+npx -y mcp-jira-tempo get --path "/rest/api/3/project/search"
 
 # Get details about a specific project
-npx -y @aashari/mcp-server-atlassian-jira get --path "/rest/api/3/project/DEV"
+npx -y mcp-jira-tempo get --path "/rest/api/3/project/DEV"
 
 # Get an issue with JMESPath filtering
-npx -y @aashari/mcp-server-atlassian-jira get --path "/rest/api/3/issue/PROJ-123" --jq "{key: key, summary: fields.summary, status: fields.status.name}"
+npx -y mcp-jira-tempo get --path "/rest/api/3/issue/PROJ-123" --jq "{key: key, summary: fields.summary, status: fields.status.name}"
 ```
+
+`npx -y mcp-jira-tempo` works once the package is published to npm. From a **local clone**, use `npm run build` and then `npm run cli -- get --path "/rest/api/3/project/search"` (or `node dist/index.js`) with the same env vars.
 
 Most AI assistants support MCP. You can also install the server globally:
 
 ```bash
-npm install -g @aashari/mcp-server-atlassian-jira
+npm install -g mcp-jira-tempo
 ```
 
 Then configure your AI assistant to use the MCP server with STDIO transport.
@@ -313,19 +317,19 @@ All tools support optional JMESPath (`jq`) filtering to extract specific data:
 
 ```bash
 # Get just project names and keys
-npx -y @aashari/mcp-server-atlassian-jira get \
+npx -y mcp-jira-tempo get \
   --path "/rest/api/3/project/search" \
   --jq "values[].{key: key, name: name}"
 
 # Get issue key and summary
-npx -y @aashari/mcp-server-atlassian-jira get \
+npx -y mcp-jira-tempo get \
   --path "/rest/api/3/issue/PROJ-123" \
   --jq "{key: key, summary: fields.summary, status: fields.status.name}"
 ```
 
 ### Response Truncation and Raw Logs
 
-For large API responses (>40k characters ≈ 10k tokens), responses are automatically truncated with guidance. The complete raw response is saved to `/tmp/mcp/mcp-server-atlassian-jira/<timestamp>-<random>.txt` for reference.
+For large API responses (>40k characters ≈ 10k tokens), responses are automatically truncated with guidance. The complete raw response is saved to `/tmp/mcp/mcp-jira-tempo/<timestamp>-<random>.txt` for reference.
 
 **When truncated, you'll see:**
 - A truncation notice with the raw file path
@@ -368,41 +372,41 @@ The CLI mirrors the MCP tools for direct terminal access:
 
 ```bash
 # GET request (returns TOON format by default)
-npx -y @aashari/mcp-server-atlassian-jira get --path "/rest/api/3/project/search"
+npx -y mcp-jira-tempo get --path "/rest/api/3/project/search"
 
 # GET with query parameters and JSON output
-npx -y @aashari/mcp-server-atlassian-jira get \
+npx -y mcp-jira-tempo get \
   --path "/rest/api/3/search/jql" \
   --query-params '{"jql": "project=DEV AND status=\"In Progress\"", "maxResults": "10"}' \
   --output-format json
 
 # GET with JMESPath filtering to extract specific fields
-npx -y @aashari/mcp-server-atlassian-jira get \
+npx -y mcp-jira-tempo get \
   --path "/rest/api/3/issue/PROJ-123" \
   --jq "{key: key, summary: fields.summary, status: fields.status.name}"
 
 # POST request (create an issue)
-npx -y @aashari/mcp-server-atlassian-jira post \
+npx -y mcp-jira-tempo post \
   --path "/rest/api/3/issue" \
   --body '{"fields": {"project": {"key": "DEV"}, "summary": "New issue title", "issuetype": {"name": "Task"}}}'
 
 # POST request (add a comment)
-npx -y @aashari/mcp-server-atlassian-jira post \
+npx -y mcp-jira-tempo post \
   --path "/rest/api/3/issue/PROJ-123/comment" \
   --body '{"body": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "My comment"}]}]}}'
 
 # PUT request (update issue - full replacement)
-npx -y @aashari/mcp-server-atlassian-jira put \
+npx -y mcp-jira-tempo put \
   --path "/rest/api/3/issue/PROJ-123" \
   --body '{"fields": {"summary": "Updated title"}}'
 
 # PATCH request (partial update)
-npx -y @aashari/mcp-server-atlassian-jira patch \
+npx -y mcp-jira-tempo patch \
   --path "/rest/api/3/issue/PROJ-123" \
   --body '{"fields": {"summary": "Updated title"}}'
 
 # DELETE request
-npx -y @aashari/mcp-server-atlassian-jira delete \
+npx -y mcp-jira-tempo delete \
   --path "/rest/api/3/issue/PROJ-123/comment/12345"
 ```
 
@@ -413,18 +417,18 @@ Requires `TEMPO_API_TOKEN` (and optionally `TEMPO_API_BASE_URL`, default `https:
 ```bash
 # List work attribute definitions (discover keys and static options)
 export TEMPO_API_TOKEN="your_tempo_token"
-npx -y @aashari/mcp-server-atlassian-jira tempo get \
+npx -y mcp-jira-tempo tempo get \
   --path "/work-attributes" \
   --output-format json
 
 # Example: worklogs (see https://apidocs.tempo.io/ for body shape, pagination, issueId)
-npx -y @aashari/mcp-server-atlassian-jira tempo get \
+npx -y mcp-jira-tempo tempo get \
   --path "/worklogs" \
   --query-params '{"limit":"10"}' \
   --output-format json
 
 # Search accounts (POST /accounts/search) — e.g. only OPEN contracts
-npx -y @aashari/mcp-server-atlassian-jira tempo post \
+npx -y mcp-jira-tempo tempo post \
   --path "/accounts/search" \
   --body '{"statuses":["OPEN"],"keys":["CLOUDBAY_DEVELOPMENT"]}' \
   --output-format json
@@ -449,7 +453,7 @@ npx -y @aashari/mcp-server-atlassian-jira tempo post \
 
 3. **Test your credentials**:
    ```bash
-   npx -y @aashari/mcp-server-atlassian-jira get --path "/rest/api/3/myself"
+   npx -y mcp-jira-tempo get --path "/rest/api/3/myself"
    ```
 
 ### "Resource not found" or "404"
@@ -483,8 +487,8 @@ npx -y @aashari/mcp-server-atlassian-jira tempo post \
 
 If you're still having issues:
 1. Run a simple test command to verify everything works
-2. Check the [GitHub Issues](https://github.com/aashari/mcp-server-atlassian-jira/issues) for similar problems
-3. Create a new issue with your error message and setup details
+2. Check your Git repository’s issue tracker for similar problems
+3. Open a new issue with your error message and setup details
 
 ## Frequently Asked Questions
 
@@ -524,7 +528,7 @@ Yes! This tool:
 
 Yes! Use JQL queries for cross-project searches. For example:
 ```bash
-npx -y @aashari/mcp-server-atlassian-jira get \
+npx -y mcp-jira-tempo get \
   --path "/rest/api/3/search/jql" \
   --query-params '{"jql": "assignee=currentUser() AND status=\"In Progress\""}'
 ```
@@ -536,7 +540,7 @@ npx -y @aashari/mcp-server-atlassian-jira get \
 **Version 3.2.1** (December 2025):
 - Added TOON output format for 30-60% token reduction
 - Implemented automatic response truncation for large payloads (>40k chars)
-- Raw API responses saved to `/tmp/mcp/mcp-server-atlassian-jira/` for reference
+- Raw API responses saved to `/tmp/mcp/mcp-jira-tempo/` for reference
 - Updated to MCP SDK v1.23.0 with modern `registerTool` API
 - Fixed deprecated `/rest/api/3/search` endpoint (now use `/rest/api/3/search/jql`)
 - Updated all dependencies to latest versions (Zod v4.1.13, Commander v14.0.2)
@@ -567,7 +571,7 @@ Legacy single-site example (Claude Desktop or Cursor `env`):
   "mcpServers": {
     "jira": {
       "command": "npx",
-      "args": ["-y", "@aashari/mcp-server-atlassian-jira"],
+      "args": ["-y", "mcp-jira-tempo"],
       "env": {
         "DEBUG": "true",
         "ATLASSIAN_SITE_NAME": "your-company",
@@ -581,21 +585,21 @@ Legacy single-site example (Claude Desktop or Cursor `env`):
 
 With **profiles**, use `ATLASSIAN_PROFILES_FILE` and optional `ATLASSIAN_DEFAULT_PROFILE` instead of the three `ATLASSIAN_*` site variables above.
 
-Debug logs are written to `~/.mcp/data/mcp-server-atlassian-jira.<session-id>.log`
+Debug logs are written to `~/.mcp/data/mcp-jira-tempo.<session-id>.log`
 
-**Check raw API responses:** When responses are truncated, the full raw response is saved to `/tmp/mcp/mcp-server-atlassian-jira/<timestamp>-<random>.txt` with request/response details.
+**Check raw API responses:** When responses are truncated, the full raw response is saved to `/tmp/mcp/mcp-jira-tempo/<timestamp>-<random>.txt` with request/response details.
 
-## Migration from upstream npm package
+## Migrating from another Jira MCP setup
 
-If you already used the published [`@aashari/mcp-server-atlassian-jira`](https://www.npmjs.com/package/@aashari/mcp-server-atlassian-jira) from npm or the upstream repo:
+If you are moving from a different MCP server or an older scoped package name:
 
-- **Legacy single-site env vars** (`ATLASSIAN_SITE_NAME`, `ATLASSIAN_USER_EMAIL`, `ATLASSIAN_API_TOKEN`) still behave the same.
-- **Multi-site**: configure `ATLASSIAN_PROFILES_FILE` (JSON file with `profiles` and optional `defaultProfile`). **`ATLASSIAN_PROFILES_JSON` is not supported** in this codebase; move that JSON into a file and set `ATLASSIAN_PROFILES_FILE`.
+- **Legacy single-site env vars** (`ATLASSIAN_SITE_NAME`, `ATLASSIAN_USER_EMAIL`, `ATLASSIAN_API_TOKEN`) work the same way here.
+- **Multi-site**: set `ATLASSIAN_PROFILES_FILE` to a JSON file with `profiles` and optional `defaultProfile`. **`ATLASSIAN_PROFILES_JSON` is not supported**; put that JSON in a file and point `ATLASSIAN_PROFILES_FILE` at it.
 - **Default profile**: `ATLASSIAN_DEFAULT_PROFILE` overrides `defaultProfile` in the file when both are set.
 - **Tempo**: set `TEMPO_API_TOKEN` (and optionally `TEMPO_API_BASE_URL`, default `https://api.tempo.io/4`) to enable `tempo_*` tools.
-- **Per-request Jira site**: pass `profile` on each `jira_*` tool call when you have multiple named profiles.
+- **Per-request Jira site**: pass `profile` on each `jira_*` tool call when you use multiple named profiles.
 
-Upstream documentation and this README may differ; treat this file as the source of truth for **this** repository.
+Update MCP client configs to use the package name **`mcp-jira-tempo`** (and the CLI/binary name **`mcp-jira-tempo`**).
 
 ## Migration from v2.x
 
@@ -631,10 +635,9 @@ jira_get, jira_post, jira_put, jira_patch, jira_delete
 
 Need help? Here's how to get assistance:
 
-1. **Check the troubleshooting section above** - most common issues are covered there
-2. **Visit our GitHub repository** for documentation and examples: [github.com/aashari/mcp-server-atlassian-jira](https://github.com/aashari/mcp-server-atlassian-jira)
-3. **Report issues** at [GitHub Issues](https://github.com/aashari/mcp-server-atlassian-jira/issues)
-4. **Start a discussion** for feature requests or general questions
+1. **Check the troubleshooting section above** — most common issues are covered there
+2. **Read this repository’s README and examples** in `examples/`
+3. **Use your Git host’s issue tracker** (GitHub/GitLab/etc.) for bugs and feature requests
 
 ---
 

@@ -1,15 +1,15 @@
-# MCP Server Atlassian Jira - Modernization Analysis
+# mcp-jira-tempo — Modernization Analysis
 
 **Date:** 2026-02-04
-**Current Version:** 3.3.0
-**Target Version:** 4.0.0 (BREAKING: OIDC Migration)
+**Current Version:** 1.0.0
+**Target Version:** 1.0.0 (OIDC Migration)
 **Analyst:** AI Agent
 
 ---
 
 ## Executive Summary
 
-mcp-server-atlassian-jira is a Model Context Protocol (MCP) server that connects AI assistants to Atlassian Jira for project management and issue tracking. The server is in good health with 36 passing tests, clean linting, and successful builds. This modernization will update 5 outdated dependencies and migrate from legacy npm token authentication to OIDC Trusted Publishing.
+**mcp-jira-tempo** is a Model Context Protocol (MCP) server that connects AI assistants to Jira Cloud and Tempo Cloud. The server is in good health with 36 passing tests, clean linting, and successful builds. This modernization will update 5 outdated dependencies and migrate from legacy npm token authentication to OIDC Trusted Publishing.
 
 **Current State:**
 - ✅ Build: Successful (TypeScript compilation)
@@ -68,8 +68,8 @@ src/
 
 ### Published Package
 
-- **npm Package:** `@aashari/mcp-server-atlassian-jira`
-- **Current Version Published:** 3.3.0
+- **npm Package:** `mcp-jira-tempo`
+- **Current Version Published:** 1.0.0
 - **Last Release:** 2025-12-03
 - **Registry:** https://registry.npmjs.org/
 
@@ -330,8 +330,8 @@ For configuration details, see docs/OIDC-TRUSTED-PUBLISHING-SETUP.md
 **npmjs.com Configuration:**
 ```
 Provider: GitHub Actions
-Owner: aashari
-Repository: mcp-server-atlassian-jira
+Owner: (your GitHub org or user)
+Repository: mcp-jira-tempo
 Workflow: .github/workflows/ci-semantic-release.yml
 Environment: (leave empty)
 ```
@@ -366,7 +366,7 @@ Root directory now contains only essential configuration files.
 1. ⏳ Verify v4.0.0 published successfully
 2. ⏳ Check npm package page for provenance attestation
 3. ⏳ Verify CHANGELOG.md updated
-4. ⏳ Test installation: `npm install -g @aashari/mcp-server-atlassian-jira`
+4. ⏳ Test installation: `npm install -g mcp-jira-tempo`
 5. ⏳ Functional test basic operations
 
 ---

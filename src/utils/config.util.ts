@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { Logger } from './logger.util.js';
+import { PACKAGE_NAME } from './constants.util.js';
 import fs from 'fs';
 import os from 'os';
 
@@ -205,5 +206,5 @@ class ConfigLoader {
 	}
 }
 
-// Create and export a singleton instance with the package name from package.json
-export const config = new ConfigLoader('@aashari/mcp-server-atlassian-jira');
+// Create and export a singleton instance with the package name from constants (kept in sync with package.json)
+export const config = new ConfigLoader(PACKAGE_NAME);

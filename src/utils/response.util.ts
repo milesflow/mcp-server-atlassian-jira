@@ -9,7 +9,7 @@ const responseLogger = Logger.forContext('utils/response.util.ts');
 
 /**
  * Get the project name from PACKAGE_NAME, stripping the scope prefix
- * e.g., "@aashari/mcp-server-atlassian-jira" -> "mcp-server-atlassian-jira"
+ * e.g., "@scope/pkg" -> "pkg"; unscoped names are returned as-is
  */
 function getProjectName(): string {
 	const name = PACKAGE_NAME.replace(/^@[^/]+\//, '');

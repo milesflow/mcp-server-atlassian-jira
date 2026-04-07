@@ -7,7 +7,7 @@ import tempoApiCommands from './tempo.api.cli.js';
 
 // Package description
 const DESCRIPTION =
-	'A Model Context Protocol (MCP) server for Atlassian Jira integration';
+	'MCP server for Jira Cloud (multi-profile) and Tempo Cloud REST APIs';
 
 // Create a contextualized logger for this file
 const cliLogger = Logger.forContext('cli/index.ts');

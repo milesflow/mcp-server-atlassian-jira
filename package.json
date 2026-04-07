@@ -1,16 +1,12 @@
 {
-  "name": "@aashari/mcp-server-atlassian-jira",
-  "version": "3.3.0",
-  "description": "Node.js/TypeScript MCP server for Atlassian Jira. Equips AI systems (LLMs) with tools to list/get projects, search/get issues (using JQL/ID), and view dev info (commits, PRs). Connects AI capabilities directly into Jira project management and issue tracking workflows.",
+  "name": "mcp-jira-tempo",
+  "version": "1.0.0",
+  "description": "MCP server for Jira Cloud (multi-profile) and Tempo Cloud: generic REST tools, file-based Jira profiles, and optional Tempo helpers for worklogs and accounts.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "commonjs",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/aashari/mcp-server-atlassian-jira.git"
-  },
   "bin": {
-    "mcp-atlassian-jira": "./dist/index.js"
+    "mcp-jira-tempo": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -45,6 +41,7 @@
     "ai",
     "atlassian",
     "jira",
+    "tempo",
     "project-management",
     "issue-tracking",
     "server",
@@ -60,7 +57,7 @@
     "cli",
     "mcp-inspector"
   ],
-  "author": "Andi Ashari",
+  "author": "huginnnx",
   "license": "ISC",
   "devDependencies": {
     "@eslint/js": "^9.39.1",
